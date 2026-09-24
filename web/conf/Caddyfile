@@ -1,0 +1,229 @@
+# ===================================================================
+# Global Options
+# ===================================================================
+{
+	http_port {$WEB_PORT:80}
+	auto_https disable_certs
+}
+
+# ===================================================================
+# Dashboard Backend
+# ===================================================================
+(dash_backend) {
+	reverse_proxy http://{$DASH_HOST:dash}:{$DASH_PORT:3000}
+}
+
+# ===================================================================
+# Server 1: Vanilla Play
+# ===================================================================
+{$WEB_VANILLA_PLAY} {
+	# ---------------------------------------------------------------
+	# Penguin Create
+	#
+	# /{lng}/penguin/create -> /create/vanilla/{lng}
+	# /penguin/create       -> /create/vanilla/en
+	# ---------------------------------------------------------------
+	@penguin_create_lang path_regexp penguin_create_lang ^/([^/]+)/penguin/create
+
+	handle @penguin_create_lang {
+		rewrite * /create/vanilla/{re.penguin_create_lang.1}
+		import dash_backend
+	}
+
+	handle /penguin/create* {
+		rewrite * /create/vanilla/en
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Penguin Activate
+	#
+	# /{lng}/penguin/activate/foo -> /activate/vanilla/{lng}/foo
+	# /{lng}/penguin/activate     -> /activate/vanilla/{lng}
+	# /penguin/activate           -> /activate/vanilla/en
+	# /penguin/activate/...       -> /activate/vanilla/en
+	# ---------------------------------------------------------------
+	@penguin_activate_lang_id path_regexp penguin_activate_lang_id ^/([^/]+)/penguin/activate/(.*)
+
+	handle @penguin_activate_lang_id {
+		rewrite * /activate/vanilla/{re.penguin_activate_lang_id.1}/{re.penguin_activate_lang_id.2}
+		import dash_backend
+	}
+
+	@penguin_activate_lang path_regexp penguin_activate_lang ^/([^/]+)/penguin/activate
+
+	handle @penguin_activate_lang {
+		rewrite * /activate/vanilla/{re.penguin_activate_lang.1}
+		import dash_backend
+	}
+
+	handle /penguin/activate* {
+		rewrite * /activate/vanilla/en
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Penguin Forgot Password
+	#
+	# /{lng}/penguin/forgot-password/foo -> /password/{lng}/foo
+	# /{lng}/penguin/forgot-password     -> /password/{lng}
+	# /penguin/forgot-password           -> /password/en
+	# ---------------------------------------------------------------
+	@penguin_forgot_lang_id path_regexp penguin_forgot_lang_id ^/([^/]+)/penguin/forgot-password/(.*)
+
+	handle @penguin_forgot_lang_id {
+		rewrite * /password/{re.penguin_forgot_lang_id.1}/{re.penguin_forgot_lang_id.2}
+		import dash_backend
+	}
+
+	@penguin_forgot_lang path_regexp penguin_forgot_lang ^/([^/]+)/penguin/forgot-password
+
+	handle @penguin_forgot_lang {
+		rewrite * /password/{re.penguin_forgot_lang.1}
+		import dash_backend
+	}
+
+	handle /penguin/forgot-password* {
+		rewrite * /password/en
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Avatar / Game API
+	#
+	# /avatar/foo/cp -> /avatar/foo
+	# ---------------------------------------------------------------
+	@avatar_cp path_regexp avatar_cp ^/avatar/(.*)/cp$
+
+	handle @avatar_cp {
+		rewrite * /avatar/{re.avatar_cp.1}
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Web Service Session
+	#
+	# /{lng}/web-service/snfgenerator/session -> /session
+	# ---------------------------------------------------------------
+	@web_service_session path_regexp web_service_session ^/([^/]+)/web-service/snfgenerator/session
+
+	handle @web_service_session {
+		rewrite * /session
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# World Name Service
+	#
+	# /api/v0.2/xxx/game/get/world-name-service/start_world_request
+	# -> /swrequest
+	# ---------------------------------------------------------------
+	handle /api/v0.2/xxx/game/get/world-name-service/start_world_request* {
+		rewrite * /swrequest
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Manager
+	#
+	# /manager     -> backend /manager
+	# /manager/... -> backend /manager/...
+	# ---------------------------------------------------------------
+	handle /manager* {
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Static Files
+	# ---------------------------------------------------------------
+	handle {
+		root * /usr/share/caddy/vanilla/play
+		file_server
+	}
+}
+
+# ===================================================================
+# Server 2: Vanilla Media
+# ===================================================================
+{$WEB_VANILLA_MEDIA} {
+	# ---------------------------------------------------------------
+	# Social Autocomplete
+	#
+	# /social/autocomplete/v2/search/suggestions -> /autocomplete
+	# ---------------------------------------------------------------
+	handle /social/autocomplete/v2/search/suggestions* {
+		rewrite * /autocomplete
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Static Files
+	# ---------------------------------------------------------------
+	handle {
+		root * /usr/share/caddy/vanilla/media
+		file_server
+	}
+}
+
+# ===================================================================
+# Server 3: Legacy Play
+#
+# This configuration corresponds to the no-path branch of the
+# original Nginx configuration.
+# ===================================================================
+{$WEB_LEGACY_PLAY} {
+	# ---------------------------------------------------------------
+	# Create Account
+	#
+	# /create_account/create_account.php -> /create/legacy
+	# ---------------------------------------------------------------
+	handle /create_account/create_account.php* {
+		rewrite * /create/legacy
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Penguin Activate
+	#
+	# /penguin/activate/foo -> /activate/legacy/foo
+	# ---------------------------------------------------------------
+	@legacy_activate path_regexp legacy_activate ^/penguin/activate/(.*)
+
+	handle @legacy_activate {
+		rewrite * /activate/legacy/{re.legacy_activate.1}
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Manager
+	#
+	# /manager     -> backend /manager
+	# /manager/... -> backend /manager/...
+	# ---------------------------------------------------------------
+	handle /manager* {
+		import dash_backend
+	}
+
+	# ---------------------------------------------------------------
+	# Static Files
+	#
+	# Default/no-path behavior from the original Nginx config.
+	# ---------------------------------------------------------------
+	handle {
+		root * /usr/share/caddy/legacy/play
+		file_server
+	}
+}
+
+# ===================================================================
+# Server 4: Legacy Media
+# ===================================================================
+{$WEB_LEGACY_MEDIA} {
+	# ---------------------------------------------------------------
+	# Static Files
+	# ---------------------------------------------------------------
+	handle {
+		root * /usr/share/caddy/legacy/media
+		file_server
+	}
+}

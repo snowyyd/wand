@@ -1,8 +1,6 @@
-version: '3.7'
-
 services:
   db:
-    image: postgres:12.2-alpine
+    image: postgres:18-alpine
     restart: always
     env_file:
       - .env
@@ -12,18 +10,31 @@ services:
       - 5432:5432
     volumes:
       - ./houdini/houdini.sql:/docker-entrypoint-initdb.d/houdini.sql
-      - ./.data:/var/lib/postgresql/data
+      - ./.data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     labels:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/db.png
+
   redis:
-    image: redis:5.0.9-alpine
+    image: redis:8-alpine
     restart: always
     networks:
       - wand
     ports:
       - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     labels:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/redis.png
+
   web:
     build: ./web
     restart: always
@@ -36,13 +47,13 @@ services:
     links:
       - dash:dash
     volumes:
-      - ./www:/usr/share/nginx/html
-      - ./legacy-media:/usr/share/nginx/legacy
-      - ./vanilla-media:/usr/share/nginx/vanilla
+      - ./www:/usr/share/caddy/html
+      - ./legacy-media:/usr/share/caddy/legacy
+      - ./vanilla-media:/usr/share/caddy/vanilla
       - ./servers.xml:/t/servers.xml
-
-      - ./templates/sites/legacy.conf.template:/etc/nginx/conf.d/legacy.conf.template
-      - ./templates/sites/vanilla.conf.template:/etc/nginx/conf.d/vanilla.conf.template
+      - ./web/conf:/etc/caddy
+      - ./.caddy/data:/data
+      - ./.caddy/config:/config
       - ./templates/legacy-media/play/index.html.template:/t/legacy/play/index.html.template
       - ./templates/legacy-media/play/es/index.html.template:/t/legacy/play/es/index.html.template
       - ./templates/legacy-media/play/fr/index.html.template:/t/legacy/play/fr/index.html.template
@@ -52,27 +63,25 @@ services:
       - ./templates/vanilla-media/play/fr/index.html.template:/t/vanilla/play/fr/index.html.template
       - ./templates/vanilla-media/play/pt/index.html.template:/t/vanilla/play/pt/index.html.template
       - ./templates/vanilla-media/media/play/web_service/environment_data.xml.template:/t/vanilla/media/play/web_service/environment_data.xml.template
-    command: ["dockerize", 
-              "-template", "/etc/nginx/conf.d/legacy.conf.template:/etc/nginx/conf.d/legacy.conf",
-              "-template", "/etc/nginx/conf.d/vanilla.conf.template:/etc/nginx/conf.d/vanilla.conf",
-              "-template", "/t/servers.xml:/usr/share/nginx/legacy/media/servers.xml",
-              "-template", "/t/servers.xml:/usr/share/nginx/vanilla/play/servers.xml",
-
-              "-template", "/t/legacy/play/index.html.template:/usr/share/nginx/legacy/play/index.html",
-              "-template", "/t/legacy/play/index.html.template:/usr/share/nginx/legacy/play/en/index.html",
-              "-template", "/t/legacy/play/es/index.html.template:/usr/share/nginx/legacy/play/es/index.html",
-              "-template", "/t/legacy/play/fr/index.html.template:/usr/share/nginx/legacy/play/fr/index.html",
-              "-template", "/t/legacy/play/pt/index.html.template:/usr/share/nginx/legacy/play/pt/index.html",
-              "-template", "/t/vanilla/play/index.html.template:/usr/share/nginx/vanilla/play/index.html",
-              "-template", "/t/vanilla/play/index.html.template:/usr/share/nginx/vanilla/play/en/index.html",
-              "-template", "/t/vanilla/play/es/index.html.template:/usr/share/nginx/vanilla/play/es/index.html",
-              "-template", "/t/vanilla/play/fr/index.html.template:/usr/share/nginx/vanilla/play/fr/index.html",
-              "-template", "/t/vanilla/play/pt/index.html.template:/usr/share/nginx/vanilla/play/pt/index.html",
-              "-template", "/t/vanilla/media/play/web_service/environment_data.xml.template:/usr/share/nginx/vanilla/media/play/web_service/environment_data.xml",
-              "nginx", "-g", "daemon off;"]
+    command: ["dockerize",
+              "-template", "/t/servers.xml:/usr/share/caddy/legacy/media/servers.xml",
+              "-template", "/t/servers.xml:/usr/share/caddy/vanilla/play/servers.xml",
+              "-template", "/t/legacy/play/index.html.template:/usr/share/caddy/legacy/play/index.html",
+              "-template", "/t/legacy/play/index.html.template:/usr/share/caddy/legacy/play/en/index.html",
+              "-template", "/t/legacy/play/es/index.html.template:/usr/share/caddy/legacy/play/es/index.html",
+              "-template", "/t/legacy/play/fr/index.html.template:/usr/share/caddy/legacy/play/fr/index.html",
+              "-template", "/t/legacy/play/pt/index.html.template:/usr/share/caddy/legacy/play/pt/index.html",
+              "-template", "/t/vanilla/play/index.html.template:/usr/share/caddy/vanilla/play/index.html",
+              "-template", "/t/vanilla/play/index.html.template:/usr/share/caddy/vanilla/play/en/index.html",
+              "-template", "/t/vanilla/play/es/index.html.template:/usr/share/caddy/vanilla/play/es/index.html",
+              "-template", "/t/vanilla/play/fr/index.html.template:/usr/share/caddy/vanilla/play/fr/index.html",
+              "-template", "/t/vanilla/play/pt/index.html.template:/usr/share/caddy/vanilla/play/pt/index.html",
+              "-template", "/t/vanilla/media/play/web_service/environment_data.xml.template:/usr/share/caddy/vanilla/media/play/web_service/environment_data.xml",
+              "caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     labels:
       net.unraid.docker.webui: http://[IP]:[PORT:${WEB_PORT}]
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/houdini.png
+
   houdini_login:
     build: ./houdini
     restart: always
@@ -86,20 +95,23 @@ services:
       - ./houdini:/usr/src/houdini
       - ./wait-for-postgres.sh:/usr/src/houdini/wait-for-postgres.sh
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     links:
       - db:db
       - redis:redis
     entrypoint: ["dockerize", "-wait", "tcp://redis:6379", "./wait-for-postgres.sh", "db", "python", "bootstrap.py", "login"]
     command: ["--port", "${GAME_LOGIN_PORT}",
-              "--redis-address", "redis", 
-              "--database-address", "db", 
-              "--database-user", "${POSTGRES_USER}", 
-              "--database-name", "${POSTGRES_USER}", 
+              "--redis-address", "redis",
+              "--database-address", "db",
+              "--database-user", "${POSTGRES_USER}",
+              "--database-name", "${POSTGRES_USER}",
               "--database-password", "${POSTGRES_PASSWORD}"]
     labels:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/houdini.png
+
   houdini_blizzard:
     build: ./houdini
     restart: always
@@ -119,11 +131,12 @@ services:
     command: ["-id", "3100", "--name", "blizzard", "--port", "9875", "--lang", "en",
               "--redis-address", "redis",
               "--database-address", "db",
-              "--database-user", "${POSTGRES_USER}", 
-              "--database-name", "${POSTGRES_USER}", 
+              "--database-user", "${POSTGRES_USER}",
+              "--database-name", "${POSTGRES_USER}",
               "--database-password", "${POSTGRES_PASSWORD}"]
     labels:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/houdini.png
+
   houdini_glaciar:
     build: ./houdini
     restart: always
@@ -143,11 +156,12 @@ services:
     command: ["-id", "3101", "--name", "glaciar", "--port", "9876", "--lang", "es",
               "--redis-address", "redis",
               "--database-address", "db",
-              "--database-user", "${POSTGRES_USER}", 
-              "--database-name", "${POSTGRES_USER}", 
+              "--database-user", "${POSTGRES_USER}",
+              "--database-name", "${POSTGRES_USER}",
               "--database-password", "${POSTGRES_PASSWORD}"]
     labels:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/houdini.png
+
   houdini_avalanche:
     build: ./houdini
     restart: always
@@ -167,11 +181,12 @@ services:
     command: ["-id", "3102", "--name", "avalanche", "--port", "9877", "--lang", "pt",
               "--redis-address", "redis",
               "--database-address", "db",
-              "--database-user", "${POSTGRES_USER}", 
-              "--database-name", "${POSTGRES_USER}", 
+              "--database-user", "${POSTGRES_USER}",
+              "--database-name", "${POSTGRES_USER}",
               "--database-password", "${POSTGRES_PASSWORD}"]
     labels:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/houdini.png
+
   houdini_yeti:
     build: ./houdini
     restart: always
@@ -191,11 +206,12 @@ services:
     command: ["-id", "3103", "--name", "yeti", "--port", "9878", "--lang", "fr",
               "--redis-address", "redis",
               "--database-address", "db",
-              "--database-user", "${POSTGRES_USER}", 
-              "--database-name", "${POSTGRES_USER}", 
+              "--database-user", "${POSTGRES_USER}",
+              "--database-name", "${POSTGRES_USER}",
               "--database-password", "${POSTGRES_PASSWORD}"]
     labels:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/houdini.png
+
   dash:
     build: ./dash
     restart: always
@@ -210,8 +226,10 @@ services:
       - ./vanilla-media/media/avatar/paper:/usr/src/dash/items
       - ./templates/dash/config.py.template:/usr/src/dash/config.py.template
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     links:
       - db:db
       - redis:redis
@@ -222,6 +240,7 @@ services:
     command: ["-c", "config.py"]
     labels:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/dash.png
+
   snowflake:
     build: ./snowflake
     restart: always
@@ -240,9 +259,12 @@ services:
       - ./snowflake:/usr/src/snowflake
       - ./.env:/usr/src/snowflake/.env
     depends_on:
-      - db
-      - redis
-      - dash
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      dash:
+        condition: service_started
     links:
       - db:db
       - redis:redis
@@ -254,4 +276,3 @@ services:
 networks:
   wand:
     driver: bridge
- 
