@@ -1,4 +1,4 @@
-# data
-.data/
-.caddy/
+/.data/
+/.redis/
+/.caddy/
 .env
