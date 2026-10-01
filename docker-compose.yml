@@ -9,7 +9,7 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - ./houdini/houdini.sql:/docker-entrypoint-initdb.d/houdini.sql
+      - ./houdini/houdini.sql:/docker-entrypoint-initdb.d/houdini.sql:ro
       - ./.data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
@@ -20,7 +20,7 @@ services:
       net.unraid.docker.icon: https://raw.githubusercontent.com/solero/wand/refs/heads/master/icons/db.png
 
   redis:
-    image: redis:8.10.2-alpine
+    image: redis:8-alpine
     restart: always
     command: redis-server --save 60 1 --loglevel warning
     volumes:
@@ -53,19 +53,19 @@ services:
       - ./www:/usr/share/caddy/html
       - ./legacy-media:/usr/share/caddy/legacy
       - ./vanilla-media:/usr/share/caddy/vanilla
-      - ./servers.xml:/t/servers.xml
+      - ./servers.xml:/t/servers.xml:ro
       - ./web/conf:/etc/caddy
       - ./.caddy/data:/data
       - ./.caddy/config:/config
-      - ./templates/legacy-media/play/index.html.template:/t/legacy/play/index.html.template
-      - ./templates/legacy-media/play/es/index.html.template:/t/legacy/play/es/index.html.template
-      - ./templates/legacy-media/play/fr/index.html.template:/t/legacy/play/fr/index.html.template
-      - ./templates/legacy-media/play/pt/index.html.template:/t/legacy/play/pt/index.html.template
-      - ./templates/vanilla-media/play/index.html.template:/t/vanilla/play/index.html.template
-      - ./templates/vanilla-media/play/es/index.html.template:/t/vanilla/play/es/index.html.template
-      - ./templates/vanilla-media/play/fr/index.html.template:/t/vanilla/play/fr/index.html.template
-      - ./templates/vanilla-media/play/pt/index.html.template:/t/vanilla/play/pt/index.html.template
-      - ./templates/vanilla-media/media/play/web_service/environment_data.xml.template:/t/vanilla/media/play/web_service/environment_data.xml.template
+      - ./templates/legacy-media/play/index.html.template:/t/legacy/play/index.html.template:ro
+      - ./templates/legacy-media/play/es/index.html.template:/t/legacy/play/es/index.html.template:ro
+      - ./templates/legacy-media/play/fr/index.html.template:/t/legacy/play/fr/index.html.template:ro
+      - ./templates/legacy-media/play/pt/index.html.template:/t/legacy/play/pt/index.html.template:ro
+      - ./templates/vanilla-media/play/index.html.template:/t/vanilla/play/index.html.template:ro
+      - ./templates/vanilla-media/play/es/index.html.template:/t/vanilla/play/es/index.html.template:ro
+      - ./templates/vanilla-media/play/fr/index.html.template:/t/vanilla/play/fr/index.html.template:ro
+      - ./templates/vanilla-media/play/pt/index.html.template:/t/vanilla/play/pt/index.html.template:ro
+      - ./templates/vanilla-media/media/play/web_service/environment_data.xml.template:/t/vanilla/media/play/web_service/environment_data.xml.template:ro
     command: ["dockerize",
               "-template", "/t/servers.xml:/usr/share/caddy/legacy/media/servers.xml",
               "-template", "/t/servers.xml:/usr/share/caddy/vanilla/play/servers.xml",
@@ -96,7 +96,6 @@ services:
       - ${GAME_LOGIN_PORT}:${GAME_LOGIN_PORT}
     volumes:
       - ./houdini:/usr/src/houdini
-      - ./wait-for-postgres.sh:/usr/src/houdini/wait-for-postgres.sh
     depends_on:
       db:
         condition: service_healthy
@@ -105,7 +104,7 @@ services:
     links:
       - db:db
       - redis:redis
-    entrypoint: ["dockerize", "-wait", "tcp://redis:6379", "./wait-for-postgres.sh", "db", "python", "bootstrap.py", "login"]
+    entrypoint: ["python", "bootstrap.py", "login"]
     command: ["--port", "${GAME_LOGIN_PORT}",
               "--redis-address", "redis",
               "--database-address", "db",
@@ -226,8 +225,8 @@ services:
       - 3000
     volumes:
       - ./dash:/usr/src/dash
-      - ./vanilla-media/media/avatar/paper:/usr/src/dash/items
-      - ./templates/dash/config.py.template:/usr/src/dash/config.py.template
+      - ./vanilla-media/media/avatar/paper:/usr/src/dash/items:ro
+      - ./templates/dash/config.py.template:/usr/src/config.py.template:ro
     depends_on:
       db:
         condition: service_healthy
@@ -238,7 +237,7 @@ services:
       - redis:redis
       - houdini_login:login
     entrypoint: ["dockerize", "-wait", "tcp://login:${GAME_LOGIN_PORT}",
-                "-template", "/usr/src/dash/config.py.template:/usr/src/dash/config.py",
+                "-template", "/usr/src/config.py.template:/usr/src/dash/config.py",
                 "python", "bootstrap.py"]
     command: ["-c", "config.py"]
     labels:
@@ -259,8 +258,8 @@ services:
       - MEDIA_LOCATION=${WEB_VANILLA_MEDIA}
       - PORT=${SNOWFLAKE_PORT}
     volumes:
-      - ./snowflake:/usr/src/snowflake
-      - ./.env:/usr/src/snowflake/.env
+      - ./snowflake:/usr/src/snowflake:ro
+      - ./.env:/usr/src/snowflake/.env:ro
     depends_on:
       db:
         condition: service_healthy
